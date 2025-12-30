@@ -1,0 +1,14 @@
+[
+    {
+        "name": "Tier 2 Schools",
+        "url": "/data/TIER_2_Schools.csv"
+    },
+    {
+        "name": "Admissions",
+        "url": "/data/admissions_duke_edu.csv"
+    },
+    {
+        "name": "Registrar",
+        "url": "/data/registrar_duke_edu.csv"
+    }
+]
