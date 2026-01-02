@@ -138,9 +138,30 @@ const TableSection = ({ data, ignoredIds, onToggleIgnore, onBulkIgnore }: TableS
                                 ))}
                             </div>
                         )}
-                        <span style={{ fontSize: '0.75rem', color: 'var(--neutral-500)' }}>
-                            {format(parseISO(item.created_at), 'MMM d, yyyy')}
-                        </span>
+                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                            {/* Dataset Badge */}
+                            {(item as any).datasetIndex && (
+                                <span style={{
+                                    fontSize: '0.7rem',
+                                    fontWeight: 700,
+                                    color: 'white',
+                                    background: (item as any).datasetColor || 'var(--neutral-500)',
+                                    padding: '2px 6px',
+                                    borderRadius: '12px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    minWidth: '20px',
+                                    height: '20px',
+                                    marginRight: '0.25rem'
+                                }} title={(item as any).datasetName}>
+                                    {(item as any).datasetIndex}
+                                </span>
+                            )}
+                            <span style={{ fontSize: '0.75rem', color: 'var(--neutral-500)' }}>
+                                {format(parseISO(item.created_at), 'MMM d, yyyy')}
+                            </span>
+                        </div>
                     </div>
 
                     {/* Code Snippet */}

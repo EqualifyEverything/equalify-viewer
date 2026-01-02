@@ -13,9 +13,6 @@ import TableSection from './TableSection';
 import { Loader2, AlertCircle, Trash2, Plus } from 'lucide-react';
 
 const Dashboard = () => {
-    // Default URL provided by user
-    const defaultUrl = 'https://api-staging.equalifyapp.com/public/getAuditTable?id=bbdb555b-cf97-43fd-896b-0b2d162c8cf3&page=1&pageSize=100&contentType=all&sortBy=created_at&sortOrder=desc&status=active';
-
     const [inputUrl, setInputUrl] = useState('');
     const [datasets, setDatasets] = useState<Dataset[]>([]);
     const [loading, setLoading] = useState(false);
@@ -25,11 +22,6 @@ const Dashboard = () => {
     // Initial Load
     useEffect(() => {
         setIgnoredIds(getIgnoredIds());
-
-        // Load default dataset if no datasets are loaded
-        if (datasets.length === 0) {
-            handleLoadUrl(defaultUrl);
-        }
     }, []);
 
     const handleLoadUrl = async (url: string) => {
@@ -37,6 +29,21 @@ const Dashboard = () => {
         setError(null);
         try {
             const newDataset = await loadDataset(url);
+
+            // Assign color and index
+            const nextIndex = datasets.length + 1;
+            const colors = [
+                '#3B82F6', // Blue
+                '#10B981', // Emerald
+                '#8B5CF6', // Violet
+                '#F97316', // Orange
+                '#EC4899', // Pink
+                '#06B6D4', // Cyan
+            ];
+            const color = colors[(nextIndex - 1) % colors.length];
+
+            newDataset.index = nextIndex;
+            newDataset.color = color;
 
             setDatasets(prev => [...prev, newDataset]);
             setInputUrl(''); // Clear input on success
@@ -65,20 +72,17 @@ const Dashboard = () => {
 
     // Derived State
     const allBlockers = useMemo(() => {
-        return datasets.flatMap(d => d.blockers);
+        return datasets.flatMap(d => d.blockers.map(b => ({
+            ...b,
+            datasetName: d.name,
+            datasetColor: d.color,
+            datasetIndex: d.index
+        })));
     }, [datasets]);
 
     const activeData = useMemo(() => {
         return allBlockers.filter(d => !ignoredIds.includes(d.id));
     }, [allBlockers, ignoredIds]);
-
-    const datasetIgnoredCount = useMemo(() => {
-        return allBlockers.filter(d => ignoredIds.includes(d.id)).length;
-    }, [allBlockers, ignoredIds]);
-
-    const totalUniqueUrls = useMemo(() => {
-        return new Set(allBlockers.map(d => d.url)).size;
-    }, [allBlockers]);
 
     const handleToggleIgnore = (id: string) => {
         const newIds = toggleIgnoreId(id);
@@ -166,8 +170,23 @@ const Dashboard = () => {
                             border: '1px solid var(--neutral-200)',
                             borderRadius: '2rem',
                             fontSize: '0.875rem',
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                            borderLeft: `4px solid ${ds.color || 'var(--neutral-300)'}`
                         }}>
+                            <span style={{
+                                background: ds.color || 'var(--neutral-300)',
+                                color: 'white',
+                                borderRadius: '50%',
+                                width: '20px',
+                                height: '20px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '0.75rem',
+                                fontWeight: 600
+                            }}>
+                                {ds.index}
+                            </span>
                             <span style={{ fontWeight: 500, color: 'var(--neutral-700)' }}>{ds.name}</span>
                             <span style={{ color: 'var(--neutral-400)', fontSize: '0.75rem' }}>({ds.blockers.length} items)</span>
                             <button
@@ -209,12 +228,29 @@ const Dashboard = () => {
                     <p style={{ marginTop: '1rem' }}>Loading dataset...</p>
                     <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } } `}</style>
                 </div>
+            ) : datasets.length === 0 ? (
+                <div style={{
+                    height: '400px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'var(--neutral-500)',
+                    background: 'white',
+                    borderRadius: 'var(--radius-lg)',
+                    border: '2px dashed var(--neutral-200)',
+                    margin: '2rem 0'
+                }}>
+                    <h3 style={{ color: 'var(--neutral-800)', fontWeight: 600 }}>Ready to analyze?</h3>
+                    <p style={{ marginTop: '0.5rem', textAlign: 'center', maxWidth: '400px' }}>
+                        Enter an Equalify API URL or a direct JSON link above to get started with your accessibility audit data.
+                    </p>
+                </div>
             ) : (
                 <>
                     <Overview
-                        activeBlockers={activeData.length}
-                        uniqueUrls={totalUniqueUrls}
-                        ignoredBlockers={datasetIgnoredCount}
+                        datasets={datasets}
+                        ignoredIds={ignoredIds}
                     />
 
                     <ChartSection

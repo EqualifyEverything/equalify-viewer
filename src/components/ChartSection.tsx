@@ -9,9 +9,9 @@ import {
     YAxis,
     CartesianGrid,
     Tooltip,
+    Legend
 } from 'recharts';
 import type { Blocker, Dataset } from '../services/DataManager';
-import { parseMessages } from '../utils/MessageParser';
 
 interface ChartSectionProps {
     aggregatedData: Blocker[];
@@ -25,39 +25,45 @@ const ChartSection = ({ aggregatedData, datasets }: ChartSectionProps) => {
         const sortedDatasets = [...datasets].sort((a, b) => a.timestamp - b.timestamp);
         return sortedDatasets.map(ds => ({
             name: ds.name || 'Untitled',
+            id: ds.id,
             count: ds.blockers.length,
+            color: ds.color,
             // Add a short label for the axis
-            label: ds.name.length > 20 ? ds.name.substring(0, 20) + '...' : ds.name
+            userLabel: ds.index ? `#${ds.index}` : (ds.name.length > 15 ? ds.name.substring(0, 15) + '...' : ds.name),
+            fullLabel: ds.name
         }));
     }, [datasets]);
 
-    // 2. Top Messages Data (Aggregated)
-    const messageChartData = useMemo(() => {
-        const grouped: Record<string, number> = {};
-        aggregatedData.forEach(item => {
-            const rawMsg = item.messages?.[0] || 'Unknown Issue';
-            const parsed = parseMessages(rawMsg);
-            const rule = parsed[0]?.rule || 'Unknown Issue';
-            grouped[rule] = (grouped[rule] || 0) + 1;
-        });
-        return Object.entries(grouped)
-            .map(([name, count]) => ({ name: name.length > 50 ? name.substring(0, 50) + '...' : name, fullName: name, count }))
-            .sort((a, b) => b.count - a.count)
-            .slice(0, 10); // Top 10
-    }, [aggregatedData]);
+    const gradientId = "datasetGradient";
 
-    // 3. Top URLs Data (Aggregated)
+
+    // 3. Top URLs Data (Comparative)
     const urlChartData = useMemo(() => {
-        const grouped: Record<string, number> = {};
+        const globalCounts: Record<string, number> = {};
+
         aggregatedData.forEach(item => {
             const url = item.url || 'Unknown URL';
-            grouped[url] = (grouped[url] || 0) + 1;
+            globalCounts[url] = (globalCounts[url] || 0) + 1;
         });
-        return Object.entries(grouped)
-            .map(([name, count]) => ({ name, count }))
-            .sort((a, b) => b.count - a.count)
-            .slice(0, 10); // Top 10
-    }, [aggregatedData]);
+
+        const topUrls = Object.entries(globalCounts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10)
+            .map(([url]) => url);
+
+        return topUrls.map(url => {
+            const row: any = {
+                name: url,
+                displayName: url.replace(/^https?:\/\//, '').substring(0, 30) + (url.length > 30 ? '...' : '')
+            };
+
+            datasets.forEach(ds => {
+                const count = ds.blockers.filter(b => b.url === url).length;
+                row[ds.id] = count;
+            });
+            return row;
+        });
+    }, [aggregatedData, datasets]);
 
     if (datasets.length === 0) {
         return (
@@ -76,14 +82,25 @@ const ChartSection = ({ aggregatedData, datasets }: ChartSectionProps) => {
                     <ResponsiveContainer>
                         <AreaChart data={timeChartData}>
                             <defs>
-                                <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="var(--color-primary-main)" stopOpacity={0.2} />
-                                    <stop offset="95%" stopColor="var(--color-primary-main)" stopOpacity={0} />
+                                <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
+                                    {timeChartData.map((entry, index) => {
+                                        const offset = timeChartData.length > 1
+                                            ? Math.round((index / (timeChartData.length - 1)) * 100)
+                                            : 0;
+                                        return (
+                                            <stop
+                                                key={entry.id}
+                                                offset={`${offset}%`}
+                                                stopColor={entry.color || 'var(--color-primary-main)'}
+                                                stopOpacity={0.8}
+                                            />
+                                        );
+                                    })}
                                 </linearGradient>
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--neutral-200)" />
                             <XAxis
-                                dataKey="label"
+                                dataKey="userLabel"
                                 stroke="var(--neutral-500)"
                                 fontSize={12}
                                 tickLine={false}
@@ -98,54 +115,31 @@ const ChartSection = ({ aggregatedData, datasets }: ChartSectionProps) => {
                             <Tooltip
                                 contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}
                                 cursor={{ stroke: 'var(--neutral-300)' }}
+                                formatter={(value: any, _name: any, props: any) => {
+                                    // Custom tooltip to show dataset name
+                                    return [value, props.payload.fullLabel];
+                                }}
                             />
                             <Area
                                 type="monotone"
                                 dataKey="count"
                                 name="Issues"
-                                stroke="var(--color-primary-main)"
+                                stroke="none"
+                                fill={`url(#${gradientId})`}
                                 strokeWidth={2}
                                 fillOpacity={1}
-                                fill="url(#colorCount)"
                             />
                         </AreaChart>
                     </ResponsiveContainer>
                 </div>
             </div>
 
-            {/* Row 2: Top Issues & Top URLs */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
-                {/* Top Messages */}
-                <div className="card">
-                    <h3 style={{ marginBottom: '1.5rem', fontSize: '1.125rem', fontWeight: 600 }}>Most Frequent Issues (Aggregate)</h3>
-                    <div style={{ width: '100%', height: 400 }}>
-                        <ResponsiveContainer>
-                            <BarChart layout="vertical" data={messageChartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="var(--neutral-200)" />
-                                <XAxis type="number" stroke="var(--neutral-500)" fontSize={12} />
-                                <YAxis
-                                    type="category"
-                                    dataKey="name"
-                                    stroke="var(--neutral-500)"
-                                    fontSize={11}
-                                    width={150}
-                                    tickLine={false}
-                                    axisLine={false}
-                                />
-                                <Tooltip
-                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}
-                                    cursor={{ fill: 'var(--neutral-100)' }}
-                                    formatter={(value: number | undefined) => [value, 'Occurrences']}
-                                />
-                                <Bar dataKey="count" fill="var(--color-primary-main)" radius={[0, 4, 4, 0]} barSize={20} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
+            {/* Row 2: Top URLs */}
+            <div>
 
                 {/* Top URLs */}
                 <div className="card">
-                    <h3 style={{ marginBottom: '1.5rem', fontSize: '1.125rem', fontWeight: 600 }}>URLs with Most Issues (Aggregate)</h3>
+                    <h3 style={{ marginBottom: '1.5rem', fontSize: '1.125rem', fontWeight: 600 }}>URLs with Most Issues (Compare)</h3>
                     <div style={{ width: '100%', height: 400 }}>
                         <ResponsiveContainer>
                             <BarChart layout="vertical" data={urlChartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
@@ -153,20 +147,28 @@ const ChartSection = ({ aggregatedData, datasets }: ChartSectionProps) => {
                                 <XAxis type="number" stroke="var(--neutral-500)" fontSize={12} />
                                 <YAxis
                                     type="category"
-                                    dataKey="name"
+                                    dataKey="displayName"
                                     stroke="var(--neutral-500)"
                                     fontSize={11}
                                     width={200}
                                     tickLine={false}
                                     axisLine={false}
-                                    tickFormatter={(val) => val.replace(/^https?:\/\//, '').substring(0, 30) + (val.length > 30 ? '...' : '')}
                                 />
                                 <Tooltip
                                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}
                                     cursor={{ fill: 'var(--neutral-100)' }}
-                                    formatter={(value: number | undefined) => [value, 'Issues']}
                                 />
-                                <Bar dataKey="count" fill="#8884d8" radius={[0, 4, 4, 0]} barSize={20} />
+                                <Legend />
+                                {datasets.map(ds => (
+                                    <Bar
+                                        key={ds.id}
+                                        dataKey={ds.id}
+                                        name={`#${ds.index} ${ds.name}`}
+                                        fill={ds.color || '#8884d8'}
+                                        radius={[0, 4, 4, 0]}
+                                        barSize={20}
+                                    />
+                                ))}
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
