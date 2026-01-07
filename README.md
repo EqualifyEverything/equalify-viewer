@@ -1,6 +1,5 @@
-# Equalify Duke 2025
-
-Accessibility Insights Dashboard for Duke University.
+# Equalify Viewer
+A way to navigate Equalify data.
 
 ## Getting Started
 
